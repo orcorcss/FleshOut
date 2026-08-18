@@ -79,4 +79,4 @@ npm run dev
 
 ## License
 
-[MIT](LICENSE) © 2026 77328067
+[MIT](LICENSE) © 2026 orcorcss
