@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI 小说阅读与改写</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <section id="authView" class="auth-view">
+      <form id="authForm" class="auth-card">
+        <div>
+          <h1>登录阅读器</h1>
+          <p>登录后进入自己的书架、版本和 DeepSeek 配置。</p>
+        </div>
+        <label>
+          <span>用户名</span>
+          <input id="authUsername" type="text" autocomplete="username" placeholder="请输入用户名" />
+        </label>
+        <label>
+          <span>密码</span>
+          <input id="authPassword" type="password" autocomplete="current-password" placeholder="请输入密码" />
+        </label>
+        <div class="auth-actions">
+          <button id="loginButton" type="submit">登录</button>
+          <button id="registerButton" class="secondary-button" type="button">创建账号</button>
+        </div>
+        <p id="authStatus" class="status-line"></p>
+      </form>
+    </section>
+
+    <div id="appShell" class="app-shell" hidden>
+      <header class="app-topbar">
+        <div class="brand-block">
+          <h1>小说阅读与改写</h1>
+          <p>上传、阅读、改写并保留每次版本</p>
+        </div>
+        <div class="account-bar">
+          <span id="currentUser">未登录</span>
+          <button id="logoutButton" class="secondary-button" type="button">退出</button>
+        </div>
+      </header>
+
+      <nav class="workspace-tabs" aria-label="工作区">
+        <button class="tab-button active" type="button" data-tab="reader">阅读</button>
+        <button class="tab-button" type="button" data-tab="shelf">书架</button>
+        <button class="tab-button" type="button" data-tab="outline">大纲设计</button>
+        <button class="tab-button" type="button" data-tab="rewrite">AI 改写</button>
+        <button class="tab-button" type="button" data-tab="style">写法卡片</button>
+        <button class="tab-button" type="button" data-tab="info">附属信息</button>
+        <button class="tab-button" type="button" data-tab="compare">版本对比</button>
+        <button class="tab-button" type="button" data-tab="settings">接口设置</button>
+        <button class="tab-button" type="button" data-tab="logs">日志</button>
+      </nav>
+
+      <main id="readerTab" class="workspace-view reader-panel active">
+        <div class="reader-control-stack">
+          <header class="reader-toolbar">
+            <div class="current-book">
+              <span id="currentTitle">未选择书籍</span>
+              <small id="currentVersion">请选择书架中的版本</small>
+            </div>
+            <div class="reader-quick-actions" aria-label="阅读操作">
+              <div id="readerPager" class="reader-pager" hidden>
+                <button id="prevChunkButton" class="secondary-button" type="button">上</button>
+                <span id="chunkMeta">1/1</span>
+                <button id="nextChunkButton" class="secondary-button" type="button">下</button>
+              </div>
+              <div id="paragraphSelectBar" class="paragraph-select-bar" hidden>
+                <button id="toggleParagraphSelectButton" class="secondary-button" type="button">段选</button>
+                <span id="paragraphSelectMeta">点选起点</span>
+                <button id="clearParagraphSelectButton" class="secondary-button" type="button" disabled>清</button>
+                <button id="rewriteParagraphSelectionButton" type="button" disabled>改写</button>
+              </div>
+              <button
+                id="toggleReaderToolbarButton"
+                class="secondary-button reader-toolbar-toggle"
+                type="button"
+                aria-expanded="true"
+              >
+                收起
+              </button>
+            </div>
+            <div class="reader-settings">
+              <label>
+                <span>渲染</span>
+                <select id="renderMode">
+                  <option value="txt">普通 TXT</option>
+                  <option value="markdown">Markdown</option>
+                  <option value="html">HTML</option>
+                </select>
+              </label>
+              <label>
+                <span>字体</span>
+                <select id="fontFamily">
+                  <option value="'Noto Serif SC', 'Songti SC', SimSun, serif">宋体</option>
+                  <option value="'Microsoft YaHei', 'PingFang SC', sans-serif">雅黑</option>
+                  <option value="'KaiTi', 'Kaiti SC', serif">楷体</option>
+                  <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+                </select>
+              </label>
+              <label>
+                <span>字号</span>
+                <input id="fontSize" type="range" min="15" max="28" step="1" />
+                <output id="fontSizeOutput"></output>
+              </label>
+              <label>
+                <span>行距</span>
+                <input id="lineHeight" type="range" min="1.4" max="2.4" step="0.1" />
+                <output id="lineHeightOutput"></output>
+              </label>
+              <label>
+                <span>文字</span>
+                <input id="textColor" type="color" />
+              </label>
+              <label>
+                <span>背景</span>
+                <input id="bgColor" type="color" />
+              </label>
+            </div>
+          </header>
+
+          <div id="readerProgress" class="progress-line reader-progress" hidden>
+            <div>
+              <span id="readerProgressLabel">正在加载</span>
+              <small id="readerProgressPercent">0%</small>
+            </div>
+            <progress id="readerProgressBar" max="100" value="0"></progress>
+          </div>
+
+        </div>
+
+        <section id="readerSurface" class="reader-surface">
+          <div id="emptyReader" class="empty-reader">
+            <h2>从左侧书架开始</h2>
+            <p>上传 TXT 后会生成初始版本；再次打开书籍时，需要先选择版本。</p>
+          </div>
+          <article id="readerText" class="reader-text" aria-label="小说正文"></article>
+        </section>
+      </main>
+
+      <section id="shelfTab" class="workspace-view workspace-panel">
+        <div class="workspace-grid">
+          <form id="uploadForm" class="upload-box">
+            <label class="file-drop">
+              <span>上传 TXT 小说</span>
+              <input id="fileInput" type="file" accept=".txt,text/plain" />
+            </label>
+            <div class="upload-row">
+              <input id="bookTitle" type="text" placeholder="书名，文件导入时默认取文件名" />
+              <select id="encodingSelect" title="TXT 编码">
+                <option value="utf-8">UTF-8</option>
+                <option value="gb18030">GB18030</option>
+              </select>
+            </div>
+            <label class="paste-novel-box">
+              <span>粘贴小说内容</span>
+              <textarea
+                id="pasteText"
+                rows="10"
+                placeholder="没有现成 TXT 文件时，可以把正文直接粘贴到这里。若同时选择了文件，将优先使用上传文件。"
+              ></textarea>
+            </label>
+            <button type="submit">保存为初始版本</button>
+            <div id="uploadProgress" class="progress-line" hidden>
+              <div>
+                <span id="uploadProgressLabel">准备上传</span>
+                <small id="uploadProgressPercent">0%</small>
+              </div>
+              <progress id="uploadProgressBar" max="100" value="0"></progress>
+            </div>
+          </form>
+
+          <section class="book-list-wrap">
+            <div class="section-title">
+              <span>书架</span>
+              <small id="bookCount">0 本</small>
+            </div>
+            <div id="bookList" class="book-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="outlineTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <div class="selection-box">
+            <div class="section-title">
+              <span>已选文本</span>
+              <small id="outlineSelectionMeta">未选择</small>
+            </div>
+            <div id="outlineSelectionPreview" class="selection-preview">在正文中拖选一段文字后，可在这里设计大纲。</div>
+          </div>
+
+          <form id="outlineForm" class="outline-form">
+            <div class="section-title">
+              <span>剧情大纲设计</span>
+              <small>针对已选段落</small>
+            </div>
+            <label>
+              <span>大纲要求</span>
+              <textarea id="outlineInstruction" rows="5" placeholder="例如：强化冲突递进，补一个更自然的反转伏笔。"></textarea>
+            </label>
+            <label class="checkbox-row">
+              <input id="outlineUseCurrentChunk" type="checkbox" />
+              <span>将当前段落作为设计参考</span>
+            </label>
+            <div class="outline-actions">
+              <button id="outlineButton" type="submit" disabled>生成大纲</button>
+              <button id="useOutlineAsRewriteButton" class="secondary-button" type="button" disabled>转入改写</button>
+            </div>
+            <div id="outlineOutput" class="outline-output">生成后会显示改写大纲思路。</div>
+          </form>
+          <p id="outlineStatus" class="status-line"></p>
+        </div>
+      </section>
+
+      <section id="rewriteTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <div class="selection-box">
+            <div class="section-title">
+              <span>已选文本</span>
+              <small id="selectionMeta">未选择</small>
+            </div>
+            <div id="selectionPreview" class="selection-preview">在正文中拖选一段文字后，可在这里提交改写。</div>
+          </div>
+
+          <form id="rewriteForm" class="rewrite-form">
+            <label>
+              <span>改写要求</span>
+              <textarea id="rewriteInstruction" rows="7" placeholder="例如：更克制、更有悬疑感，保留人物对白信息。"></textarea>
+            </label>
+            <label class="checkbox-row rewrite-reference-option">
+              <input id="rewriteUseCurrentChunk" type="checkbox" />
+              <span>将当前段落作为编写参考</span>
+            </label>
+            <button id="rewriteButton" type="submit" disabled>提交改写并保存新版本</button>
+          </form>
+          <p id="rewriteStatus" class="status-line"></p>
+        </div>
+      </section>
+
+      <section id="compareTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <div class="section-title">
+            <span>改写记录</span>
+            <small id="compareCount">0 条</small>
+          </div>
+          <div id="compareList" class="compare-list"></div>
+        </div>
+      </section>
+
+      <section id="styleTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <form id="styleAnalysisForm" class="style-analysis-form">
+            <div class="section-title">
+              <span>写法分析</span>
+              <small>样本文字转为可复用提示词</small>
+            </div>
+            <label>
+              <span>卡片标题</span>
+              <input id="styleCardTitle" type="text" maxlength="80" placeholder="可留空，由模型自动概括" />
+            </label>
+            <label>
+              <span>样本文字</span>
+              <textarea
+                id="styleSampleText"
+                rows="10"
+                placeholder="粘贴一段你想学习的描写文本，系统会分析语气、用词、节奏、情节设计等，并生成可复制的改写提示词。"
+              ></textarea>
+            </label>
+            <button id="analyzeStyleButton" type="submit">分析并保存写法卡片</button>
+          </form>
+          <p id="styleAnalysisStatus" class="status-line"></p>
+
+          <section class="style-card-panel">
+            <div class="section-title">
+              <span>常见写法卡片</span>
+              <small id="styleCardCount">0 张</small>
+            </div>
+            <div id="styleCardList" class="style-card-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="infoTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <form id="bookInfoForm" class="book-info-form">
+            <div class="section-title">
+              <span>文档附属信息</span>
+              <small id="bookInfoMeta">未选择</small>
+            </div>
+            <label>
+              <span>全文故事背景</span>
+              <textarea id="storyBackground" rows="6" placeholder="时代、地域、世界观、重要规则等"></textarea>
+            </label>
+            <div class="character-card-panel">
+              <div class="section-title">
+                <span>角色卡片</span>
+                <small id="characterCardMeta">0 个</small>
+              </div>
+              <div id="characterCardList" class="character-card-list"></div>
+            </div>
+            <label>
+              <span>角色设定原文</span>
+              <textarea id="characterSettings" rows="7" placeholder="主要角色、关系、动机、性格、能力或限制等"></textarea>
+            </label>
+            <label>
+              <span>情节发展</span>
+              <textarea id="plotDevelopment" rows="7" placeholder="已发生情节、关键冲突、线索、阶段性发展等"></textarea>
+            </label>
+            <div class="extract-range-panel">
+              <div class="section-title">
+                <span>分析范围</span>
+                <small id="extractRangeMeta">未切分</small>
+              </div>
+              <div class="range-actions">
+                <button id="selectAllChunksButton" class="secondary-button" type="button" disabled>全选</button>
+                <button id="selectCurrentChunkButton" class="secondary-button" type="button" disabled>当前段</button>
+                <button id="clearChunksButton" class="secondary-button" type="button" disabled>清空</button>
+              </div>
+              <div id="extractChunkList" class="chunk-check-list"></div>
+            </div>
+            <div class="info-actions">
+              <button id="saveInfoButton" type="submit" disabled>保存附属信息</button>
+              <button id="extractInfoButton" class="secondary-button" type="button" disabled>从当前版本提取</button>
+            </div>
+          </form>
+          <p id="bookInfoStatus" class="status-line"></p>
+        </div>
+      </section>
+
+      <section id="settingsTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <form id="settingsForm" class="settings-form">
+            <label>
+              <span>API Key</span>
+              <input id="apiKey" type="password" autocomplete="off" placeholder="留空则不修改已保存 Key" />
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input id="baseUrl" type="url" />
+            </label>
+            <label>
+              <span>模型</span>
+              <input id="modelName" type="text" list="modelOptions" />
+              <datalist id="modelOptions">
+                <option value="deepseek-v4-flash"></option>
+                <option value="deepseek-chat"></option>
+                <option value="deepseek-reasoner"></option>
+              </datalist>
+            </label>
+            <div class="settings-grid">
+              <label>
+                <span>温度</span>
+                <input id="temperature" type="number" min="0" max="2" step="0.1" />
+              </label>
+              <label>
+                <span>最大输出</span>
+                <input id="maxTokens" type="number" min="256" max="65536" step="256" />
+              </label>
+            </div>
+            <div class="settings-grid">
+              <label>
+                <span>思考模式</span>
+                <select id="thinking">
+                  <option value="disabled">关闭</option>
+                  <option value="enabled">开启</option>
+                  <option value="auto">自动 / 不传</option>
+                </select>
+              </label>
+              <label>
+                <span>思考模式强度</span>
+                <select id="reasoningEffort">
+                  <option value="low">低（low）</option>
+                  <option value="high">高（high）</option>
+                  <option value="max">最大（max）</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="prompts-head">
+              <span>改写系统级提示词</span>
+              <button id="addPrompt" type="button">添加一条</button>
+            </div>
+            <div id="systemPrompts" class="prompt-list"></div>
+
+            <div class="extract-prompt-settings">
+              <div class="section-title">
+                <span>剧情大纲设计提示词</span>
+                <small>用于已选段落的大纲思路</small>
+              </div>
+              <label>
+                <span>大纲设计 System</span>
+                <textarea id="outlineSystemPrompt" rows="4"></textarea>
+              </label>
+              <label>
+                <span>大纲设计要求</span>
+                <textarea id="outlineUserPrompt" rows="5"></textarea>
+              </label>
+            </div>
+
+            <div class="extract-prompt-settings">
+              <div class="section-title">
+                <span>附属信息提取提示词</span>
+                <small>用于故事背景、角色、情节提取</small>
+              </div>
+              <label>
+                <span>提取 System</span>
+                <textarea id="extractSystemPrompt" rows="4"></textarea>
+              </label>
+              <label>
+                <span>故事背景</span>
+                <textarea id="extractBackgroundPrompt" rows="3"></textarea>
+              </label>
+              <label>
+                <span>角色设定</span>
+                <textarea id="extractCharactersPrompt" rows="4"></textarea>
+              </label>
+              <label>
+                <span>情节发展</span>
+                <textarea id="extractPlotPrompt" rows="3"></textarea>
+              </label>
+            </div>
+
+            <div class="extract-prompt-settings">
+              <div class="section-title">
+                <span>写法分析参数</span>
+                <small>用于生成常见写法卡片</small>
+              </div>
+              <label>
+                <span>写法分析模型</span>
+                <input id="styleAnalysisModel" type="text" placeholder="留空则使用上方全局模型" />
+              </label>
+              <div class="settings-grid">
+                <label>
+                  <span>写法分析温度</span>
+                  <input id="styleAnalysisTemperature" type="number" min="0" max="2" step="0.1" />
+                </label>
+                <label>
+                  <span>写法分析最大输出</span>
+                  <input id="styleAnalysisMaxTokens" type="number" min="256" max="65536" step="256" />
+                </label>
+              </div>
+              <label>
+                <span>写法分析 System</span>
+                <textarea id="styleAnalysisSystemPrompt" rows="4"></textarea>
+              </label>
+              <label>
+                <span>写法分析要求</span>
+                <textarea id="styleAnalysisUserPrompt" rows="5"></textarea>
+              </label>
+            </div>
+
+            <button type="submit">保存接口设置</button>
+          </form>
+          <p id="settingsStatus" class="status-line"></p>
+        </div>
+      </section>
+
+      <section id="logsTab" class="workspace-view workspace-panel">
+        <div class="workspace-narrow">
+          <div class="section-title">
+            <span>调用日志</span>
+            <small id="logCount">0 条</small>
+          </div>
+          <div class="log-actions">
+            <button id="refreshLogsButton" class="secondary-button" type="button">刷新</button>
+            <button id="clearLogsButton" class="danger-button" type="button">清空日志</button>
+          </div>
+          <div id="logList" class="log-list"></div>
+        </div>
+      </section>
+    </div>
+
+    <dialog id="versionDialog" class="version-dialog">
+      <form method="dialog" class="dialog-card">
+        <header>
+          <div>
+            <h2 id="versionDialogTitle">选择版本</h2>
+            <p>打开书籍前先选择要阅读和继续改写的版本。</p>
+          </div>
+          <button class="icon-close" value="cancel" aria-label="关闭" type="submit">×</button>
+        </header>
+        <div id="versionChoices" class="version-choices"></div>
+      </form>
+    </dialog>
+
+    <dialog id="characterDialog" class="version-dialog">
+      <form method="dialog" class="dialog-card">
+        <header>
+          <div>
+            <h2 id="characterDialogTitle">角色详情</h2>
+            <p id="characterDialogSubtitle"></p>
+          </div>
+          <button class="icon-close" value="cancel" aria-label="关闭" type="submit">×</button>
+        </header>
+        <div id="characterDialogBody" class="character-detail"></div>
+      </form>
+    </dialog>
+
+    <dialog id="styleCardDialog" class="version-dialog">
+      <form method="dialog" class="dialog-card">
+        <header>
+          <div>
+            <h2 id="styleCardDialogTitle">写法详情</h2>
+            <p id="styleCardDialogSubtitle"></p>
+          </div>
+          <button class="icon-close" value="cancel" aria-label="关闭" type="submit">×</button>
+        </header>
+        <div id="styleCardDialogBody" class="style-card-detail"></div>
+        <footer class="dialog-actions">
+          <button id="copyStylePromptButton" type="button">复制提示词</button>
+          <button class="secondary-button" value="cancel" type="submit">关闭</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
